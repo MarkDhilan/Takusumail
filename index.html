@@ -1160,7 +1160,18 @@ const API = 'https://api.mail.tm';
 let state = { email: null, password: null, token: null, accountId: null };
 let refreshTimer = null;
 let progressTimer = null;
+
 const REFRESH_SEC = 15;
+
+function saveState() {
+  try { localStorage.setItem('takusu_state', JSON.stringify(state)); } catch(_) {}
+}
+function loadState() {
+  try {
+    const s = localStorage.getItem('takusu_state');
+    if (s) { const parsed = JSON.parse(s); Object.assign(state, parsed); }
+  } catch(_) {}
+}
 
 async function generateEmail() {
   const btn = document.getElementById('generateBtn');
@@ -1195,6 +1206,7 @@ async function generateEmail() {
     if (!tr.ok) throw new Error('Could not get token');
     const td = await tr.json();
     state.token = td.token;
+    saveState();
     activateUI();
     toast('⚡', 'Inbox ready!');
     startRefreshCycle();
@@ -1338,6 +1350,7 @@ async function loginWithToken() {
     state.email = emailFromToken || '(email from token)';
     state.accountId = null;
     state.password = '(restored via token)';
+    saveState();
     activateUI();
     renderInbox(d['hydra:member'] || []);
     document.getElementById('lastRefreshed').textContent = fmtTime(new Date());
@@ -1398,6 +1411,19 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('reuseTokenInput').value = t;
     openReuseModal();
     setTimeout(() => loginWithToken(), 300);
+    return;
+  }
+  // Restore saved session on reload
+  loadState();
+  if (state.token && !isTokenExpired(state.token)) {
+    activateUI();
+    startRefreshCycle();
+    refreshInbox();
+    toast('⚡', 'Session restored');
+  } else if (state.token) {
+    // Token expired — clear saved state
+    localStorage.removeItem('takusu_state');
+    state = { email: null, password: null, token: null, accountId: null };
   }
 });
 
