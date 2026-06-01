@@ -1157,42 +1157,6 @@ animateLightning();
 
 /* ─── App Logic ─── */
 const API = 'https://api.mail.tm';
-
-async function apiFetch(path, opts = {}) {
-  const method = (opts.method || 'GET').toUpperCase();
-  const target = API + path;
-  const headers = {
-    'Accept': 'application/json',
-    ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
-    ...(opts.headers || {})
-  };
-
-  const urls = [
-    target,
-    `https://corsproxy.io/?url=${encodeURIComponent(target)}`,
-    `https://proxy.cors.sh/${target}`
-  ];
-
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { ...opts, method, headers });
-      let text = await res.text();
-      // corsproxy sometimes double-encodes — unwrap if needed
-      try {
-        const maybe = JSON.parse(text);
-        // allorigins wraps in {contents:'...'} — unwrap it
-        if (maybe && typeof maybe.contents === 'string') text = maybe.contents;
-      } catch(_) {}
-      return {
-        ok: res.status >= 200 && res.status < 300,
-        status: res.status,
-        json: () => Promise.resolve(JSON.parse(text)),
-        text: () => Promise.resolve(text)
-      };
-    } catch(e) { continue; }
-  }
-  throw new Error('Cannot reach mail.tm — check your connection.');
-}
 let state = { email: null, password: null, token: null, accountId: null };
 let refreshTimer = null;
 let progressTimer = null;
@@ -1204,17 +1168,15 @@ async function generateEmail() {
   btn.disabled = true;
   content.innerHTML = '<span class="spinner"></span>';
   try {
-    const dr = await apiFetch('/domains?page=1');
+    const dr = await fetch(`${API}/domains?page=1`);
     if (!dr.ok) throw new Error('Cannot reach mail.tm API');
     const dd = await dr.json();
     const domain = dd['hydra:member']?.[0]?.domain;
     if (!domain) throw new Error('No domain available');
-
-    const username = randName();
+    const username = rand(9);
     state.password = rand(8) + 'Aa1!';
     state.email = `${username}@${domain}`;
-
-    const ar = await apiFetch('/accounts', {
+    const ar = await fetch(`${API}/accounts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: state.email, password: state.password })
@@ -1225,7 +1187,7 @@ async function generateEmail() {
     }
     const ad = await ar.json();
     state.accountId = ad.id;
-    const tr = await apiFetch('/token', {
+    const tr = await fetch(`${API}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: state.email, password: state.password })
@@ -1243,10 +1205,6 @@ async function generateEmail() {
   btn.disabled = false;
   content.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> New Email`;
 }
-
-function onCnInput() {}
-async function preloadDomain() {}
-
 
 function activateUI() {
   const et = document.getElementById('emailText');
@@ -1275,7 +1233,7 @@ function activateUI() {
 async function refreshInbox() {
   if (!state.token) return;
   try {
-    const r = await apiFetch('/messages?page=1', {
+    const r = await fetch(`${API}/messages?page=1`, {
       headers: { Authorization: `Bearer ${state.token}` }
     });
     if (r.status === 401) {
@@ -1325,7 +1283,7 @@ function renderInbox(msgs) {
 
 async function openMail(id) {
   try {
-    const r = await apiFetch(`/messages/${id}`, {
+    const r = await fetch(`${API}/messages/${id}`, {
       headers: { Authorization: `Bearer ${state.token}` }
     });
     if (!r.ok) throw new Error();
@@ -1370,7 +1328,7 @@ async function loginWithToken() {
   }
   const emailFromToken = emailFromJWT(t);
   try {
-    const r = await apiFetch('/messages?page=1', {
+    const r = await fetch(`${API}/messages?page=1`, {
       headers: { Authorization: `Bearer ${t}` }
     });
     if (r.status === 401) { toast('✕', 'Token rejected — account may have expired'); showExpiredWarning(); return; }
@@ -1435,7 +1393,6 @@ function startRefreshCycle() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  preloadDomain();
   const t = new URLSearchParams(location.search).get('token');
   if (t) {
     document.getElementById('reuseTokenInput').value = t;
@@ -1444,11 +1401,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function randName() {
-  const names = ['martha','oliver','claire','felix','diana','lucas','grace','henry','luna','miles','ivy','oscar','ruby','finn','rose','leo','jade','theo','nova','eden'];
-  const n = Math.floor(Math.random() * 9000) + 1000;
-  return names[Math.floor(Math.random() * names.length)] + n;
-}
 function rand(n) {
   const c = 'abcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({length:n}, () => c[Math.floor(Math.random()*c.length)]).join('');
