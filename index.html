@@ -797,14 +797,8 @@ body::before {
   line-height: 1.6;
   letter-spacing: 0.05em;
 }
-.mail-body {
-  padding: 20px 22px;
-  font-size: 0.88rem;
-  line-height: 1.8;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  letter-spacing: 0.02em;
+#mailBody {
+  border-top: 1px solid var(--border);
 }
 
 /* ─── Textarea ─── */
@@ -1101,7 +1095,7 @@ textarea::placeholder { color: var(--text-tertiary); }
       <div class="mail-subj-lg" id="mailSubject">—</div>
       <div class="mail-meta-sm" id="mailMeta">—</div>
     </div>
-    <div class="mail-body" id="mailBody">—</div>
+    <iframe id="mailBody" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" style="width:100%;border:none;min-height:320px;display:block;background:#fff;border-radius:0 0 4px 4px;" scrolling="auto"></iframe>
   </div>
 </div>
 
@@ -1302,9 +1296,13 @@ async function openMail(id) {
     const m = await r.json();
     document.getElementById('mailSubject').textContent = m.subject || '(no subject)';
     document.getElementById('mailMeta').textContent = `From: ${m.from?.address || 'unknown'}   ·   ${new Date(m.createdAt).toLocaleString()}`;
-    let body = m.text || '';
-    if (!body && m.html) { const t = document.createElement('div'); t.innerHTML = m.html[0]||''; body = t.innerText; }
-    document.getElementById('mailBody').textContent = body || '(empty)';
+    const iframe = document.getElementById('mailBody');
+    if (m.html && m.html.length) {
+      iframe.srcdoc = m.html[0] || '';
+    } else {
+      const plain = m.text || '(empty)';
+      iframe.srcdoc = `<html><body style="margin:16px;font-family:sans-serif;font-size:14px;line-height:1.7;color:#222;word-break:break-word;white-space:pre-wrap">${esc(plain)}</body></html>`;
+    }
     document.getElementById('mailModal').classList.add('open');
     refreshInbox();
   } catch(e) { toast('✕', 'Could not load message'); }
