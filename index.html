@@ -1222,19 +1222,44 @@ animateLightning();
 /* ─── App Logic ─── */
 // All requests are proxied so your real IP is never sent to mail.tm
 const API_ORIGIN = 'https://api.mail.tm';
-const PROXY = 'https://corsproxy.io/?url=';
-const API = API_ORIGIN; // alias kept for readability below
+const API = API_ORIGIN;
 
-function apiFetch(path, opts = {}) {
-  const url = PROXY + encodeURIComponent(API_ORIGIN + path);
-  // Strip Authorization from proxied URL, keep in headers only
-  return fetch(url, {
+// Proxy fallback chain — tried in order until one succeeds
+const PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://proxy.cors.sh/${url}`,
+];
+
+async function apiFetch(path, opts = {}) {
+  const target = API_ORIGIN + path;
+  const fetchOpts = {
     ...opts,
     headers: {
-      'x-requested-with': 'XMLHttpRequest',
+      'Content-Type': 'application/json',
       ...(opts.headers || {})
     }
-  });
+  };
+  // Remove Content-Type for GET/HEAD (allorigins doesn't like it)
+  const method = (opts.method || 'GET').toUpperCase();
+  if (method === 'GET') delete fetchOpts.headers['Content-Type'];
+
+  let lastErr;
+  for (const proxyFn of PROXIES) {
+    try {
+      const res = await fetch(proxyFn(target), fetchOpts);
+      // allorigins wraps errors as 200 with error body — detect that
+      if (res.ok || res.status < 500) return res;
+    } catch(e) {
+      lastErr = e;
+    }
+  }
+  // All proxies failed — try direct as last resort
+  try {
+    return await fetch(target, fetchOpts);
+  } catch(e) {
+    throw new Error('Network error — all proxies failed. Check your connection.');
+  }
 }
 let state = { email: null, password: null, token: null, accountId: null };
 let refreshTimer = null;
