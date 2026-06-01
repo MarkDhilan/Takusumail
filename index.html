@@ -382,58 +382,6 @@ body::before {
 
 .card-body { padding: 14px 20px 20px; }
 
-/* ─── Custom name input ─── */
-.cn-row {
-  display: flex;
-  align-items: center;
-  background: var(--void);
-  border: 1px solid var(--border-mid);
-  margin-bottom: 10px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  overflow: hidden;
-}
-.cn-row:focus-within {
-  border-color: var(--purple-bright);
-  box-shadow: 0 0 0 1px var(--purple-dim);
-}
-.cn-row.error { border-color: var(--red); }
-.cn-row.taken { border-color: var(--red); }
-.cn-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--text);
-  padding: 11px 8px 11px 14px;
-  min-width: 0;
-  caret-color: var(--purple-light);
-  letter-spacing: 0.04em;
-}
-.cn-input::placeholder { color: var(--text-tertiary); font-size: 0.75rem; }
-.cn-suffix {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  padding-right: 10px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-}
-.cn-hint {
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.1em;
-  color: var(--text-tertiary);
-  margin-top: -6px;
-  margin-bottom: 12px;
-  padding-left: 2px;
-}
-.cn-hint.err { color: var(--red); }
-
 /* ─── Email field ─── */
 .email-field {
   display: flex;
@@ -1031,18 +979,6 @@ textarea::placeholder { color: var(--text-tertiary); }
       </span>
     </div>
     <div class="card-body">
-      <!-- Custom name -->
-      <div class="cn-row" id="cnRow">
-        <input class="cn-input" id="cnInput" type="text" maxlength="20"
-          placeholder="custom username (optional)"
-          oninput="onCnInput()"
-          onkeydown="if(event.key==='Enter')generateEmail()"
-          autocomplete="off" autocorrect="off" spellcheck="false"
-        />
-        <span class="cn-suffix" id="cnSuffix">@···</span>
-      </div>
-      <div class="cn-hint" id="cnHint">a–z 0–9 · leave blank for random</div>
-
       <div class="email-field" id="emailWrapper">
         <span class="email-val empty" id="emailText">_ generate an address to begin</span>
         <button class="copy-btn" id="copyEmailBtn" onclick="copyEmail()" disabled title="Copy">
@@ -1220,49 +1156,19 @@ function animateLightning() {
 animateLightning();
 
 /* ─── App Logic ─── */
-// All requests are proxied so your real IP is never sent to mail.tm
-const API_ORIGIN = 'https://api.mail.tm';
-const API = API_ORIGIN;
-
-// Proxy fallback chain — corsproxy passes through raw responses transparently
-const PROXIES = [
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://proxy.cors.sh/${url}`,
-  url => `https://cors-anywhere.herokuapp.com/${url}`,
-];
+const API = 'https://api.mail.tm';
 
 async function apiFetch(path, opts = {}) {
-  const target = API_ORIGIN + path;
   const method = (opts.method || 'GET').toUpperCase();
-  const fetchOpts = {
+  const res = await fetch(API + path, {
     ...opts,
     method,
     headers: {
       ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
       ...(opts.headers || {})
     }
-  };
-
-  for (const proxyFn of PROXIES) {
-    try {
-      const res = await Promise.race([
-        fetch(proxyFn(target), fetchOpts),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
-      ]);
-      // If proxy itself errored (5xx from proxy), skip to next
-      if (res.status >= 502 && res.status <= 504) continue;
-      return res;
-    } catch(e) {
-      // Network error or timeout — try next proxy
-      continue;
-    }
-  }
-  // All proxies failed — try direct
-  try {
-    return await fetch(target, fetchOpts);
-  } catch(e) {
-    throw new Error('Cannot reach mail.tm — check your connection and try again.');
-  }
+  });
+  return res;
 }
 let state = { email: null, password: null, token: null, accountId: null };
 let refreshTimer = null;
@@ -1272,16 +1178,8 @@ const REFRESH_SEC = 15;
 async function generateEmail() {
   const btn = document.getElementById('generateBtn');
   const content = document.getElementById('generateBtnContent');
-  const cnInput = document.getElementById('cnInput');
-  const cnRow = document.getElementById('cnRow');
-  const cnHint = document.getElementById('cnHint');
   btn.disabled = true;
   content.innerHTML = '<span class="spinner"></span>';
-
-  // Reset any previous taken/error state
-  cnRow.classList.remove('taken', 'error');
-  cnHint.classList.remove('err');
-
   try {
     const dr = await apiFetch('/domains?page=1');
     if (!dr.ok) throw new Error('Cannot reach mail.tm API');
@@ -1289,13 +1187,7 @@ async function generateEmail() {
     const domain = dd['hydra:member']?.[0]?.domain;
     if (!domain) throw new Error('No domain available');
 
-    // Update suffix display
-    document.getElementById('cnSuffix').textContent = `@${domain}`;
-
-    // Determine username
-    const raw = cnInput.value.trim().replace(/[^a-z0-9_]/gi, '').toLowerCase();
-    const username = raw.length >= 3 ? raw : rand(9);
-
+    const username = randName();
     state.password = rand(8) + 'Aa1!';
     state.email = `${username}@${domain}`;
 
@@ -1304,23 +1196,10 @@ async function generateEmail() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: state.email, password: state.password })
     });
-
     if (!ar.ok) {
       const e = await ar.json();
-      const msg = (e['hydra:description'] || '').toLowerCase();
-      // Detect "already used" / conflict errors
-      if (ar.status === 422 || ar.status === 409 || msg.includes('already') || msg.includes('exist') || msg.includes('taken') || msg.includes('violation')) {
-        cnRow.classList.add('taken');
-        cnHint.textContent = '✕ Username already taken — try another';
-        cnHint.classList.add('err');
-        cnInput.focus();
-        btn.disabled = false;
-        content.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> New Email`;
-        return;
-      }
       throw new Error(e['hydra:description'] || 'Account creation failed');
     }
-
     const ad = await ar.json();
     state.accountId = ad.id;
     const tr = await apiFetch('/token', {
@@ -1342,35 +1221,8 @@ async function generateEmail() {
   content.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> New Email`;
 }
 
-function onCnInput() {
-  const input = document.getElementById('cnInput');
-  const hint = document.getElementById('cnHint');
-  const row = document.getElementById('cnRow');
-  // Sanitize in-place
-  const clean = input.value.replace(/[^a-z0-9_]/gi, '').toLowerCase();
-  if (input.value !== clean) input.value = clean;
-  // Reset taken state when user edits
-  row.classList.remove('taken', 'error');
-  hint.classList.remove('err');
-  if (!clean) {
-    hint.textContent = 'a–z 0–9 · leave blank for random';
-  } else if (clean.length < 3) {
-    hint.textContent = '⚠ Min 3 characters';
-    hint.classList.add('err');
-  } else {
-    hint.textContent = `✓ Will try: ${clean}@···`;
-  }
-}
-
-async function preloadDomain() {
-  try {
-    const dr = await apiFetch('/domains?page=1');
-    if (!dr.ok) return;
-    const dd = await dr.json();
-    const domain = dd['hydra:member']?.[0]?.domain;
-    if (domain) document.getElementById('cnSuffix').textContent = `@${domain}`;
-  } catch(_) {}
-}
+function onCnInput() {}
+async function preloadDomain() {}
 
 
 function activateUI() {
@@ -1569,6 +1421,11 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function randName() {
+  const names = ['martha','oliver','claire','felix','diana','lucas','grace','henry','luna','miles','ivy','oscar','ruby','finn','rose','leo','jade','theo','nova','eden'];
+  const n = Math.floor(Math.random() * 9000) + 1000;
+  return names[Math.floor(Math.random() * names.length)] + n;
+}
 function rand(n) {
   const c = 'abcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({length:n}, () => c[Math.floor(Math.random()*c.length)]).join('');
