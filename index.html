@@ -1224,41 +1224,44 @@ animateLightning();
 const API_ORIGIN = 'https://api.mail.tm';
 const API = API_ORIGIN;
 
-// Proxy fallback chain — tried in order until one succeeds
+// Proxy fallback chain — corsproxy passes through raw responses transparently
 const PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   url => `https://proxy.cors.sh/${url}`,
+  url => `https://cors-anywhere.herokuapp.com/${url}`,
 ];
 
 async function apiFetch(path, opts = {}) {
   const target = API_ORIGIN + path;
+  const method = (opts.method || 'GET').toUpperCase();
   const fetchOpts = {
     ...opts,
+    method,
     headers: {
-      'Content-Type': 'application/json',
+      ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
       ...(opts.headers || {})
     }
   };
-  // Remove Content-Type for GET/HEAD (allorigins doesn't like it)
-  const method = (opts.method || 'GET').toUpperCase();
-  if (method === 'GET') delete fetchOpts.headers['Content-Type'];
 
-  let lastErr;
   for (const proxyFn of PROXIES) {
     try {
-      const res = await fetch(proxyFn(target), fetchOpts);
-      // allorigins wraps errors as 200 with error body — detect that
-      if (res.ok || res.status < 500) return res;
+      const res = await Promise.race([
+        fetch(proxyFn(target), fetchOpts),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+      ]);
+      // If proxy itself errored (5xx from proxy), skip to next
+      if (res.status >= 502 && res.status <= 504) continue;
+      return res;
     } catch(e) {
-      lastErr = e;
+      // Network error or timeout — try next proxy
+      continue;
     }
   }
-  // All proxies failed — try direct as last resort
+  // All proxies failed — try direct
   try {
     return await fetch(target, fetchOpts);
   } catch(e) {
-    throw new Error('Network error — all proxies failed. Check your connection.');
+    throw new Error('Cannot reach mail.tm — check your connection and try again.');
   }
 }
 let state = { email: null, password: null, token: null, accountId: null };
