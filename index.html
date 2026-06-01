@@ -1166,13 +1166,29 @@ async function apiFetch(path, opts = {}) {
     ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
     ...(opts.headers || {})
   };
-  // Try direct first (works in some environments), then proxy
-  for (const url of [target, `https://corsproxy.io/?url=${encodeURIComponent(target)}`]) {
+
+  const urls = [
+    target,
+    `https://corsproxy.io/?url=${encodeURIComponent(target)}`,
+    `https://proxy.cors.sh/${target}`
+  ];
+
+  for (const url of urls) {
     try {
       const res = await fetch(url, { ...opts, method, headers });
-      const text = await res.text();
-      // Build a fake Response with the text so callers can call .json()
-      return new Response(text, { status: res.status, headers: { 'Content-Type': 'application/json' } });
+      let text = await res.text();
+      // corsproxy sometimes double-encodes — unwrap if needed
+      try {
+        const maybe = JSON.parse(text);
+        // allorigins wraps in {contents:'...'} — unwrap it
+        if (maybe && typeof maybe.contents === 'string') text = maybe.contents;
+      } catch(_) {}
+      return {
+        ok: res.status >= 200 && res.status < 300,
+        status: res.status,
+        json: () => Promise.resolve(JSON.parse(text)),
+        text: () => Promise.resolve(text)
+      };
     } catch(e) { continue; }
   }
   throw new Error('Cannot reach mail.tm — check your connection.');
