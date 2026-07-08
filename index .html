@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Takusu — Shadow Inbox</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Black+Ops+One&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root {
+  --void: #000000;
+  --bg: #05020d;
+  --surface-1: #0a0515;
+  --surface-2: #0f0820;
+  --surface-3: #140b2a;
+  --border: rgba(120,60,220,0.15);
+  --border-mid: rgba(140,80,255,0.25);
+  --border-bright: rgba(160,100,255,0.4);
+  --purple: #8b3dff;
+  --purple-bright: #a855f7;
+  --purple-light: #c084fc;
+  --purple-dim: rgba(139,61,255,0.1);
+  --purple-glow: rgba(139,61,255,0.35);
+  --lightning: #bf7fff;
+  --lightning-hot: #e0b8ff;
+  --slash: rgba(168,85,247,0.8);
+  --green: #7fffb0;
+  --green-dim: rgba(127,255,176,0.08);
+  --red: #ff4d6d;
+  --text: #f0e8ff;
+  --text-secondary: #9b87b8;
+  --text-tertiary: #4a3a6a;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-sub: 'Rajdhani', sans-serif;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --radius-lg: 4px;
+  --radius-md: 3px;
+  --radius-sm: 2px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ─── Noise texture ─── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px;
+}
+
+/* ─── Canvas lightning bg ─── */
+#bgCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* ─── Radial glow orbs ─── */
+.glow-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+}
+.orb-1 {
+  width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(139,61,255,0.25) 0%, transparent 70%);
+  top: -250px; right: -200px;
+  animation: orbFloat 8s ease-in-out infinite;
+}
+.orb-2 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(88,28,135,0.2) 0%, transparent 70%);
+  bottom: -150px; left: -150px;
+  animation: orbFloat 10s ease-in-out infinite reverse;
+}
+.orb-3 {
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%);
+  top: 40%; left: 20%;
+  animation: orbPulse 6s ease-in-out infinite;
+}
+@keyframes orbFloat { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,-30px)} }
+@keyframes orbPulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+
+/* ─── Layout ─── */
+.page {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+}
+
+/* ─── Slash decoration ─── */
+.slash-deco {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.slash-line {
+  position: absolute;
+  width: 2px;
+  height: 60vh;
+  background: linear-gradient(180deg, transparent 0%, var(--purple) 40%, var(--lightning) 60%, transparent 100%);
+  filter: blur(1px);
+  animation: slashDrop 3s ease-in-out infinite;
+}
+.slash-line:nth-child(1) { left: 15%; top: -10%; animation-delay: 0s; opacity: 0.3; transform: rotate(25deg); }
+.slash-line:nth-child(2) { right: 20%; top: 10%; animation-delay: 1.2s; opacity: 0.2; transform: rotate(-15deg); height: 40vh; }
+.slash-line:nth-child(3) { left: 50%; top: -20%; animation-delay: 2.1s; opacity: 0.15; transform: rotate(10deg); height: 80vh; }
+@keyframes slashDrop {
+  0% { transform: rotate(25deg) translateY(-100%); opacity:0; }
+  20% { opacity: 0.4; }
+  80% { opacity: 0.2; }
+  100% { transform: rotate(25deg) translateY(120vh); opacity:0; }
+}
+
+/* ─── Header ─── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 48px;
+  animation: fadeDown 0.6s ease both;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  width: 38px; height: 38px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-mark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--purple-dim);
+  border: 1px solid var(--border-bright);
+  transform: rotate(45deg);
+  transition: all 0.3s;
+}
+.logo-mark:hover::before {
+  background: rgba(139,61,255,0.2);
+  box-shadow: 0 0 20px var(--purple-glow);
+}
+.logo-mark svg { position: relative; z-index: 1; color: var(--purple-light); }
+
+.logo-name {
+  font-family: 'Black Ops One', var(--font-display);
+  font-size: 1.55rem;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  line-height: 1;
+  text-shadow: 0 0 18px var(--purple-glow), 2px 2px 0px rgba(88,28,135,0.8);
+  -webkit-text-stroke: 0.5px rgba(168,85,247,0.4);
+}
+.logo-name .dim { color: var(--purple-light); font-size: 0.82em; opacity: 0.7; }
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green);
+  background: var(--green-dim);
+  border: 1px solid rgba(127,255,176,0.2);
+  padding: 6px 14px;
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+}
+
+.live-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 6px var(--green)} 50%{opacity:0.4;box-shadow:none} }
+
+/* ─── Hero ─── */
+.hero {
+  margin-bottom: 40px;
+  animation: fadeUp 0.7s ease both 0.08s;
+}
+
+.hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.eyebrow-line {
+  flex: 1;
+  max-width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--purple));
+}
+.eyebrow-text {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--purple-bright);
+}
+
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 12vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  color: var(--text);
+  text-shadow: 0 0 60px rgba(139,61,255,0.4);
+}
+.hero h1 .ghost {
+  -webkit-text-stroke: 1px rgba(168,85,247,0.4);
+  color: transparent;
+}
+.hero h1 .lit {
+  color: var(--purple-light);
+  text-shadow: 0 0 30px var(--purple-glow), 0 0 80px rgba(139,61,255,0.3);
+}
+
+.hero-slash {
+  height: 3px;
+  background: linear-gradient(90deg, var(--purple), var(--lightning-hot), transparent);
+  margin: 14px 0 18px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-slash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, white, transparent);
+  animation: slashShine 3s ease-in-out infinite;
+}
+@keyframes slashShine { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+
+.hero-desc {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 380px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  text-transform: uppercase;
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+  transition: all 0.2s;
+}
+.tag:hover { color: var(--purple-light); border-color: var(--border-mid); }
+
+/* ─── Card ─── */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  position: relative;
+  margin-bottom: 10px;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--purple), var(--lightning-hot), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.card:hover { border-color: var(--border-mid); }
+.card:hover::before { opacity: 1; }
+
+/* Corner brackets */
+.card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 16px; height: 16px;
+  border-bottom: 2px solid var(--purple);
+  border-right: 2px solid var(--purple);
+  opacity: 0.5;
+}
+
+.card-top-bar {
+  height: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.card-top-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--purple), var(--lightning-hot));
+  transition: width 1s linear;
+  box-shadow: 0 0 8px var(--purple);
+}
+
+.card-head {
+  padding: 16px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--purple-bright);
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--purple);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+  box-shadow: 0 0 12px var(--purple-glow);
+}
+
+.card-body { padding: 14px 20px 20px; }
+
+/* ─── Email field ─── */
+.email-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--void);
+  border: 1px solid var(--border);
+  padding: 13px 12px 13px 16px;
+  margin-bottom: 14px;
+  transition: all 0.25s;
+  position: relative;
+}
+.email-field.active {
+  border-color: var(--purple-bright);
+  box-shadow: 0 0 0 1px var(--purple-dim), 0 0 20px rgba(139,61,255,0.15);
+}
+.email-field.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--purple), var(--lightning-hot), transparent);
+}
+
+.email-val {
+  flex: 1;
+  font-size: 0.92rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.email-val.empty {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  font-style: normal;
+  letter-spacing: 0.05em;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-mid);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.copy-btn:hover { background: var(--purple-dim); color: var(--purple-light); border-color: var(--purple); box-shadow: 0 0 10px var(--purple-dim); }
+.copy-btn:active { transform: scale(0.94); }
+.copy-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; }
+
+/* ─── Button grid ─── */
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.btn-solo { display: grid; grid-template-columns: 1fr; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--font-sub);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.18s;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.4s;
+}
+.btn:hover::after { transform: translateX(100%); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none !important; }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--purple), #6920e0);
+  color: #fff;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  box-shadow: 0 4px 20px rgba(139,61,255,0.3);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--purple-bright), var(--purple));
+  box-shadow: 0 4px 32px rgba(139,61,255,0.5), 0 0 60px rgba(139,61,255,0.2);
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-mid);
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--purple-light);
+  border-color: var(--purple);
+}
+
+.btn-ghost {
+  background: var(--purple-dim);
+  color: var(--purple-light);
+  border: 1px solid rgba(139,61,255,0.3);
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(139,61,255,0.18);
+  box-shadow: 0 0 20px var(--purple-dim), inset 0 0 20px var(--purple-dim);
+}
+
+.btn-full { width: 100%; }
+
+/* ─── Status strip ─── */
+.status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  background: var(--green-dim);
+  border: 1px solid rgba(127,255,176,0.15);
+  margin-top: 10px;
+}
+.status-strip.hidden { display: none; }
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.status-right {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+/* ─── Inbox ─── */
+.inbox-section { display: none; }
+.inbox-section.visible { display: block; }
+
+.inbox-empty {
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--text-tertiary);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  letter-spacing: 0.05em;
+}
+.inbox-icon {
+  width: 44px; height: 44px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  color: var(--purple);
+  transform: rotate(45deg);
+}
+.inbox-icon svg { transform: rotate(-45deg); }
+
+.mail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+.mail-row::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--purple);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.mail-row:last-child { border-bottom: none; }
+.mail-row:hover { background: var(--surface-2); }
+.mail-row:hover::before { opacity: 1; }
+.mail-row.unread .mail-subj { font-weight: 600; color: var(--text); }
+
+.mail-av {
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--purple), #3b0764);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: white;
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+}
+
+.mail-info { flex: 1; min-width: 0; }
+.mail-from {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+  letter-spacing: 0.04em;
+}
+.mail-subj { font-size: 0.9rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; font-weight: 500; letter-spacing: 0.02em; }
+.mail-prev { font-size: 0.72rem; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-aside { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.mail-time { font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-tertiary); white-space: nowrap; letter-spacing: 0.06em; }
+.mail-dot { width: 6px; height: 6px; background: var(--purple); transform: rotate(45deg); box-shadow: 0 0 6px var(--purple); }
+
+/* ─── Divider ─── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 4px 0;
+}
+
+/* ─── Modal ─── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(16px);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-backdrop.open { display: flex; animation: bgIn 0.2s ease; }
+@media (min-width: 540px) { .modal-backdrop { align-items: center; } }
+
+.modal {
+  background: var(--surface-1);
+  border: 1px solid var(--border-mid);
+  width: 100%;
+  max-width: 460px;
+  max-height: 92vh;
+  overflow-y: auto;
+  animation: sheetUp 0.35s cubic-bezier(0.32,1.2,0.6,1);
+  position: relative;
+}
+.modal::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--purple), var(--lightning-hot), var(--purple));
+}
+
+.modal-pill {
+  width: 36px; height: 3px;
+  background: var(--border-mid);
+  margin: 16px auto 0;
+}
+
+.modal-inner { padding: 20px 22px 28px; }
+
+.modal-close {
+  position: absolute; top: 14px; right: 14px;
+  width: 28px; height: 28px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  transform: rotate(45deg);
+  clip-path: polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%);
+}
+.modal-close:hover { background: var(--purple-dim); color: var(--purple-light); border-color: var(--purple); }
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.modal-sub {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 22px;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Copy field ─── */
+.copy-field {
+  display: flex;
+  align-items: center;
+  background: var(--void);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+.copy-field:hover { border-color: var(--border-mid); }
+
+.cf-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: white;
+  background: var(--purple);
+  padding: 0 13px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cf-val {
+  flex: 1;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+.cf-copy {
+  flex-shrink: 0;
+  height: 42px;
+  padding: 0 13px;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.cf-copy:hover { color: var(--purple-light); background: var(--purple-dim); }
+
+/* QR */
+.qr-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px;
+  background: var(--void);
+  border: 1px solid var(--border);
+  margin: 14px 0;
+  position: relative;
+}
+.qr-block::before, .qr-block::after {
+  content: '';
+  position: absolute;
+  width: 12px; height: 12px;
+}
+.qr-block::before { top: 0; left: 0; border-top: 2px solid var(--purple); border-left: 2px solid var(--purple); }
+.qr-block::after { bottom: 0; right: 0; border-bottom: 2px solid var(--purple); border-right: 2px solid var(--purple); }
+.qr-block canvas, .qr-block img { border-radius: 0; }
+.qr-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-tertiary);
+  margin-top: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* Mail reader */
+.mail-hdr { padding: 22px 22px 16px; border-bottom: 1px solid var(--border); }
+.mail-subj-lg {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.mail-meta-sm {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  letter-spacing: 0.05em;
+}
+.mail-body {
+  padding: 20px 22px;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Textarea ─── */
+textarea {
+  width: 100%;
+  height: 96px;
+  background: var(--void);
+  border: 1px solid var(--border-mid);
+  padding: 13px 15px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+  resize: none;
+  outline: none;
+  line-height: 1.55;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+  letter-spacing: 0.03em;
+}
+textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 1px var(--purple-dim); }
+textarea::placeholder { color: var(--text-tertiary); }
+
+/* ─── Toast ─── */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(72px);
+  background: var(--surface-2);
+  border: 1px solid var(--border-bright);
+  border-top: 2px solid var(--purple);
+  padding: 10px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  z-index: 300;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.32,1.2,0.6,1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  max-width: calc(100vw - 40px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 20px var(--purple-dim);
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast-icon { color: var(--purple-light); }
+
+/* ─── Spinner ─── */
+.spinner {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: var(--purple-light);
+  animation: spin 0.55s linear infinite;
+  display: inline-block;
+}
+
+/* ─── Refresh btn ─── */
+.inbox-head-btn {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: none;
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+.inbox-head-btn:hover { color: var(--purple-light); border-color: var(--purple); background: var(--purple-dim); }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 0; }
+
+/* ─── Animations ─── */
+@keyframes fadeUp { from { opacity:0; transform:translateY(24px) } to { opacity:1; transform:translateY(0) } }
+@keyframes fadeDown { from { opacity:0; transform:translateY(-14px) } to { opacity:1; transform:translateY(0) } }
+@keyframes bgIn { from { opacity:0 } to { opacity:1 } }
+@keyframes sheetUp { from { transform:translateY(50px); opacity:0 } to { transform:translateY(0); opacity:1 } }
+@keyframes spin { to { transform:rotate(360deg) } }
+
+/* ─── Lightning flash ─── */
+@keyframes lightningFlash {
+  0%, 92%, 100% { opacity: 0; }
+  94% { opacity: 1; }
+  96% { opacity: 0.3; }
+  98% { opacity: 0.8; }
+}
+.lightning-flash {
+  position: fixed;
+  inset: 0;
+  background: rgba(139,61,255,0.03);
+  pointer-events: none;
+  z-index: 0;
+  animation: lightningFlash 8s ease-in-out infinite;
+}
+
+/* Card animation */
+.card:nth-child(1) { animation: fadeUp 0.6s ease both 0.12s; }
+.card:nth-child(2) { animation: fadeUp 0.6s ease both 0.22s; }
+</style>
+</head>
+<body>
+
+<!-- Background elements -->
+<canvas id="bgCanvas"></canvas>
+<div class="glow-layer">
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+</div>
+<div class="slash-deco">
+  <div class="slash-line"></div>
+  <div class="slash-line"></div>
+  <div class="slash-line"></div>
+</div>
+<div class="lightning-flash"></div>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+      <span class="logo-name">TAKUSU</span>
+    </div>
+    <div class="header-badge">
+      <div class="live-dot"></div>
+      Online
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <div class="eyebrow-line"></div>
+      <span class="eyebrow-text">Disposable · Instant · Private</span>
+    </div>
+    <h1>SHADOW<br><span class="lit">IN</span><span class="ghost">BOX</span></h1>
+    <div class="hero-slash"></div>
+    <p class="hero-desc">No sign-up. No traces. Receive OTPs, verifications, and sign-ups — vanish without a footprint.</p>
+    <div class="tag-row">
+      <span class="tag">No sign-up</span>
+      <span class="tag">Works for OTPs</span>
+      <span class="tag">24h inbox</span>
+      <span class="tag">Token restore</span>
+      <span class="tag">Receive-only</span>
+    </div>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+    <div class="card-top-bar"><div class="card-top-bar-fill" id="progressFill"></div></div>
+    <div class="card-head">
+      <span class="card-label">// Your Temp Address</span>
+      <span id="inboxBadge" style="display:none">
+        <span class="badge-count" id="countBadge">0</span>
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="email-field" id="emailWrapper">
+        <span class="email-val empty" id="emailText">_ generate an address to begin</span>
+        <button class="copy-btn" id="copyEmailBtn" onclick="copyEmail()" disabled title="Copy">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="0"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="btn-grid">
+        <button class="btn btn-primary" id="generateBtn" onclick="generateEmail()">
+          <span id="generateBtnContent">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            New Email
+          </span>
+        </button>
+        <button class="btn btn-secondary" id="reuseBtn" onclick="openReuseModal()" disabled>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Restore
+        </button>
+      </div>
+
+      <button class="btn btn-ghost btn-full" id="accessBtn" onclick="openAccessModal()" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Access Details &amp; Token
+      </button>
+
+      <div class="status-strip hidden" id="statusBar">
+        <div class="status-left">
+          <div class="live-dot"></div>
+          Inbox active
+        </div>
+        <div class="status-right" id="lastRefreshed">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inbox -->
+  <div class="inbox-section" id="inboxSection">
+    <div class="card">
+      <div class="card-head" style="padding-bottom:14px">
+        <span class="card-label">// Inbox</span>
+        <button class="inbox-head-btn" onclick="refreshInbox()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div id="inboxContent">
+        <div class="inbox-empty">
+          <div class="inbox-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          Awaiting transmissions<br>
+          <span style="font-size:0.7rem;font-family:var(--font-mono);letter-spacing:0.1em">Auto-sync every 15s</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Access Modal -->
+<div class="modal-backdrop" id="accessModal" onclick="closeAccessModal(event)">
+  <div class="modal">
+    <div class="modal-pill"></div>
+    <button class="modal-close" onclick="closeAccessDirect()">✕</button>
+    <div class="modal-inner">
+      <div class="modal-title">Access Details</div>
+      <div class="modal-sub">Save your token to reopen this inbox on any device. Keep it private.</div>
+
+      <div class="copy-field">
+        <span class="cf-label">Token</span>
+        <span class="cf-val" id="tokenDisplay">—</span>
+        <button class="cf-copy" onclick="copyToken()">Copy</button>
+      </div>
+      <div class="copy-field">
+        <span class="cf-label">Link</span>
+        <span class="cf-val" id="reuseLinkDisplay">—</span>
+        <button class="cf-copy" onclick="copyReuseLink()">Copy</button>
+      </div>
+
+      <button class="btn btn-primary btn-full" style="margin-top:6px" onclick="downloadDetails()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Details
+      </button>
+
+      <div class="qr-block">
+        <div id="qrCode"></div>
+        <div class="qr-label">Scan to open on another device</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reuse Modal -->
+<div class="modal-backdrop" id="reuseModal" onclick="closeReuseModal(event)">
+  <div class="modal">
+    <div class="modal-pill"></div>
+    <button class="modal-close" onclick="closeReuseDirect()">✕</button>
+    <div class="modal-inner">
+      <div class="modal-title">Restore Inbox</div>
+      <div class="modal-sub">Paste your JWT access token to reopen a previous inbox session.</div>
+      <textarea id="reuseTokenInput" placeholder="Paste your access token here…"
+        onfocus="this.style.borderColor='var(--purple)'" onblur="this.style.borderColor='var(--border-mid)'"></textarea>
+      <button class="btn btn-primary btn-full" onclick="loginWithToken()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Restore with Token
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Mail Reader -->
+<div class="modal-backdrop" id="mailModal" onclick="closeMailModal(event)">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-pill"></div>
+    <button class="modal-close" onclick="closeMailDirect()">✕</button>
+    <div class="mail-hdr">
+      <div class="mail-subj-lg" id="mailSubject">—</div>
+      <div class="mail-meta-sm" id="mailMeta">—</div>
+    </div>
+    <div class="mail-body" id="mailBody">—</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon">⚡</span>
+  <span id="toastMsg">Copied!</span>
+</div>
+
+<script>
+/* ─── Lightning canvas ─── */
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function drawBolt(x1, y1, x2, y2, branches, depth) {
+  if (depth <= 0) return;
+  const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 60;
+  const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 60;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(mx, my);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = `rgba(${140 + Math.random()*60}, ${40 + Math.random()*40}, ${255}, ${0.15 + depth * 0.08})`;
+  ctx.lineWidth = depth * 0.5;
+  ctx.shadowColor = 'rgba(139,61,255,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  if (branches > 0 && Math.random() > 0.4) {
+    const bx = mx + (Math.random() - 0.5) * 80;
+    const by = my + Math.random() * 60;
+    drawBolt(mx, my, bx, by, 0, depth - 1);
+  }
+  drawBolt(x1, y1, mx, my, branches - 1, depth - 1);
+  drawBolt(mx, my, x2, y2, branches - 1, depth - 1);
+}
+
+function animateLightning() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (Math.random() < 0.04) {
+    const x = Math.random() * canvas.width;
+    drawBolt(x, 0, x + (Math.random() - 0.5) * 100, canvas.height * 0.6, 2, 3);
+  }
+  requestAnimationFrame(animateLightning);
+}
+animateLightning();
+
+/* ─── App Logic ─── */
+const API = 'https://api.mail.tm';
+let state = { email: null, password: null, token: null, accountId: null };
+let refreshTimer = null;
+let progressTimer = null;
+
+const REFRESH_SEC = 15;
+
+function saveState() {
+  try {
+    localStorage.setItem('takusu_state', JSON.stringify(state));
+  } catch(_) {
+    // localStorage unavailable (private mode, sandboxed preview, etc.) —
+    // the URL token fallback (syncUrlToken) still keeps the session alive.
+  }
+}
+function loadState() {
+  try {
+    const s = localStorage.getItem('takusu_state');
+    if (s) { const parsed = JSON.parse(s); Object.assign(state, parsed); }
+  } catch(_) {}
+}
+// Keep the current token mirrored into the URL so a plain page refresh
+// (or a browser/environment where localStorage doesn't persist) can still
+// restore the same inbox.
+function syncUrlToken(token) {
+  try {
+    const url = new URL(location.href);
+    if (token) url.searchParams.set('token', token);
+    else url.searchParams.delete('token');
+    history.replaceState(null, '', url.pathname + url.search);
+  } catch(_) {}
+}
+
+async function generateEmail() {
+  const btn = document.getElementById('generateBtn');
+  const content = document.getElementById('generateBtnContent');
+  btn.disabled = true;
+  content.innerHTML = '<span class="spinner"></span>';
+  try {
+    const dr = await fetch(`${API}/domains?page=1`);
+    if (!dr.ok) throw new Error('Cannot reach mail.tm API');
+    const dd = await dr.json();
+    const domain = dd['hydra:member']?.[0]?.domain;
+    if (!domain) throw new Error('No domain available');
+    const username = rand(9);
+    state.password = rand(8) + 'Aa1!';
+    state.email = `${username}@${domain}`;
+    const ar = await fetch(`${API}/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: state.email, password: state.password })
+    });
+    if (!ar.ok) {
+      const e = await ar.json();
+      throw new Error(e['hydra:description'] || 'Account creation failed');
+    }
+    const ad = await ar.json();
+    state.accountId = ad.id;
+    const tr = await fetch(`${API}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: state.email, password: state.password })
+    });
+    if (!tr.ok) throw new Error('Could not get token');
+    const td = await tr.json();
+    state.token = td.token;
+    saveState();
+    syncUrlToken(state.token);
+    activateUI();
+    toast('⚡', 'Inbox ready!');
+    startRefreshCycle();
+    refreshInbox();
+  } catch(e) {
+    toast('✕', e.message);
+  }
+  btn.disabled = false;
+  content.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> New Email`;
+}
+
+function activateUI() {
+  const et = document.getElementById('emailText');
+  et.textContent = state.email;
+  et.classList.remove('empty');
+  document.getElementById('emailWrapper').classList.add('active');
+  document.getElementById('copyEmailBtn').disabled = false;
+  document.getElementById('reuseBtn').disabled = false;
+  document.getElementById('accessBtn').disabled = false;
+  document.getElementById('statusBar').classList.remove('hidden');
+  document.getElementById('inboxSection').classList.add('visible');
+  document.getElementById('inboxBadge').style.display = 'inline';
+  document.getElementById('tokenDisplay').textContent = state.token;
+  const link = `${location.origin}${location.pathname}?token=${state.token}`;
+  document.getElementById('reuseLinkDisplay').textContent = link;
+  document.getElementById('qrCode').innerHTML = '';
+  try {
+    new QRCode(document.getElementById('qrCode'), {
+      text: link, width: 160, height: 160,
+      colorDark: '#a855f7', colorLight: '#000000',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(_) {}
+}
+
+async function refreshInbox() {
+  if (!state.token) return;
+  try {
+    const r = await fetch(`${API}/messages?page=1`, {
+      headers: { Authorization: `Bearer ${state.token}` }
+    });
+    if (r.status === 401) {
+      clearInterval(progressTimer);
+      document.getElementById('lastRefreshed').textContent = '⚠ Session expired';
+      document.getElementById('inboxContent').innerHTML = `
+        <div class="inbox-empty">
+          <div class="inbox-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <strong style="color:var(--text)">Session expired</strong><br>
+          <span style="font-size:0.7rem;font-family:var(--font-mono);letter-spacing:0.08em">mail.tm accounts expire ~24h. Generate new address.</span>
+        </div>`;
+      return;
+    }
+    if (!r.ok) throw new Error('Could not fetch inbox');
+    const d = await r.json();
+    renderInbox(d['hydra:member'] || []);
+    document.getElementById('lastRefreshed').textContent = fmtTime(new Date());
+  } catch(e) {}
+}
+
+function renderInbox(msgs) {
+  document.getElementById('countBadge').textContent = msgs.length;
+  const el = document.getElementById('inboxContent');
+  if (!msgs.length) {
+    el.innerHTML = `<div class="inbox-empty">
+      <div class="inbox-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+      Awaiting transmissions<br><span style="font-size:0.7rem;font-family:var(--font-mono)">Waiting for messages…</span>
+    </div>`;
+    return;
+  }
+  el.innerHTML = msgs.map(m => {
+    const initials = (m.from?.address || '?')[0].toUpperCase();
+    return `<div class="mail-row ${m.seen ? '' : 'unread'}" onclick="openMail('${m.id}')">
+      <div class="mail-av">${esc(initials)}</div>
+      <div class="mail-info">
+        <div class="mail-from">${esc(m.from?.address || 'unknown')}</div>
+        <div class="mail-subj">${esc(m.subject || '(no subject)')}</div>
+        <div class="mail-prev">${esc(m.intro || '')}</div>
+      </div>
+      <div class="mail-aside">
+        <span class="mail-time">${fmtTime(new Date(m.createdAt))}</span>
+        ${!m.seen ? '<span class="mail-dot"></span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openMail(id) {
+  try {
+    const r = await fetch(`${API}/messages/${id}`, {
+      headers: { Authorization: `Bearer ${state.token}` }
+    });
+    if (!r.ok) throw new Error();
+    const m = await r.json();
+    document.getElementById('mailSubject').textContent = m.subject || '(no subject)';
+    document.getElementById('mailMeta').textContent = `From: ${m.from?.address || 'unknown'}   ·   ${new Date(m.createdAt).toLocaleString()}`;
+    let body = m.text || '';
+    if (!body && m.html) { body = htmlToText(m.html[0] || ''); }
+    document.getElementById('mailBody').textContent = body || '(empty)';
+    document.getElementById('mailModal').classList.add('open');
+    refreshInbox();
+  } catch(e) { toast('✕', 'Could not load message'); }
+}
+
+function htmlToText(html) {
+  const t = document.createElement('div');
+  t.innerHTML = html;
+  // Detached elements can't compute innerText reliably (no layout/rendering
+  // context), so it silently falls back to raw text — including the
+  // contents of <style>/<script> tags. Strip those explicitly first.
+  t.querySelectorAll('style, script, head, title, noscript').forEach(el => el.remove());
+  // Turn <br> and block-level tags into line breaks before flattening,
+  // so paragraphs don't run together.
+  t.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  t.querySelectorAll('p, div, tr, li, h1, h2, h3, h4, h5, h6').forEach(el => {
+    el.append('\n');
+  });
+  let text = t.textContent || '';
+  text = text.replace(/[ \t]+/g, ' ').replace(/\n[ \t]*\n[ \t]*(\n[ \t]*)+/g, '\n\n').trim();
+  return text;
+}
+
+function decodeJWT(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(decodeURIComponent(atob(b64).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2,'0')).join('')));
+  } catch(_) { return null; }
+}
+function isTokenExpired(token) {
+  const p = decodeJWT(token);
+  if (!p || !p.exp) return false;
+  return Date.now() / 1000 > p.exp;
+}
+function emailFromJWT(token) {
+  const p = decodeJWT(token);
+  return p?.username || p?.email || p?.address || null;
+}
+
+function openReuseModal() { document.getElementById('reuseModal').classList.add('open'); }
+function closeReuseModal(e) { if (e.target === document.getElementById('reuseModal')) closeReuseDirect(); }
+function closeReuseDirect() { document.getElementById('reuseModal').classList.remove('open'); }
+
+async function loginWithToken() {
+  const t = document.getElementById('reuseTokenInput').value.trim();
+  if (!t) { toast('✕', 'Please paste a token'); return; }
+  if (isTokenExpired(t)) {
+    toast('✕', 'Token expired — accounts last ~24h');
+    showExpiredWarning();
+    return;
+  }
+  const emailFromToken = emailFromJWT(t);
+  try {
+    const r = await fetch(`${API}/messages?page=1`, {
+      headers: { Authorization: `Bearer ${t}` }
+    });
+    if (r.status === 401) { toast('✕', 'Token rejected — account may have expired'); showExpiredWarning(); return; }
+    if (!r.ok) throw new Error('Could not verify token');
+    const d = await r.json();
+    state.token = t;
+    state.email = emailFromToken || '(email from token)';
+    state.accountId = null;
+    state.password = '(restored via token)';
+    saveState();
+    syncUrlToken(state.token);
+    activateUI();
+    renderInbox(d['hydra:member'] || []);
+    document.getElementById('lastRefreshed').textContent = fmtTime(new Date());
+    closeReuseDirect();
+    startRefreshCycle();
+    toast('⚡', 'Inbox restored!');
+  } catch(e) { toast('✕', e.message); }
+}
+
+function showExpiredWarning() {
+  const input = document.getElementById('reuseTokenInput');
+  input.style.borderColor = 'var(--red)';
+  setTimeout(() => { input.style.borderColor = 'var(--border-mid)'; }, 2500);
+}
+
+function openAccessModal() { document.getElementById('accessModal').classList.add('open'); }
+function closeAccessModal(e) { if (e.target === document.getElementById('accessModal')) closeAccessDirect(); }
+function closeAccessDirect() { document.getElementById('accessModal').classList.remove('open'); }
+
+function closeMailModal(e) { if (e.target === document.getElementById('mailModal')) closeMailDirect(); }
+function closeMailDirect() { document.getElementById('mailModal').classList.remove('open'); }
+
+function copyEmail() {
+  if (!state.email) return;
+  navigator.clipboard.writeText(state.email).then(() => toast('⚡', 'Address copied'));
+}
+function copyToken() {
+  navigator.clipboard.writeText(state.token || '').then(() => toast('⚡', 'Token copied'));
+}
+function copyReuseLink() {
+  const link = document.getElementById('reuseLinkDisplay').textContent;
+  navigator.clipboard.writeText(link).then(() => toast('⚡', 'Link copied'));
+}
+function downloadDetails() {
+  const link = document.getElementById('reuseLinkDisplay').textContent;
+  const text = `Takusu Access Details\n${'─'.repeat(36)}\nEmail: ${state.email}\nToken: ${state.token}\nLink:  ${link}\nSaved: ${new Date().toLocaleString()}\n\nKeep this private.`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = `takusu-${state.email?.split('@')[0] || 'inbox'}.txt`;
+  a.click();
+  toast('⚡', 'Details downloaded');
+}
+
+function startRefreshCycle() {
+  clearInterval(refreshTimer); clearInterval(progressTimer);
+  let secs = 0;
+  const fill = document.getElementById('progressFill');
+  progressTimer = setInterval(() => {
+    secs++;
+    fill.style.width = ((secs / REFRESH_SEC) * 100) + '%';
+    if (secs >= REFRESH_SEC) { secs = 0; refreshInbox(); }
+  }, 1000);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // 1) Prefer a valid session saved in this browser (localStorage).
+  loadState();
+  if (state.token && !isTokenExpired(state.token)) {
+    activateUI();
+    startRefreshCycle();
+    refreshInbox();
+    syncUrlToken(state.token);
+    toast('⚡', 'Session restored');
+    return;
+  }
+  if (state.token) {
+    // Saved token expired — clear it
+    localStorage.removeItem('takusu_state');
+    state = { email: null, password: null, token: null, accountId: null };
+  }
+
+  // 2) Fall back to a token in the URL (e.g. localStorage was unavailable,
+  //    or this is a shared reuse link). Restore silently — no modal popup —
+  //    so a plain refresh doesn't flash a "paste token" dialog every time.
+  const urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) {
+    if (isTokenExpired(urlToken)) {
+      toast('✕', 'Link expired — accounts last ~24h');
+      syncUrlToken(null);
+    } else {
+      document.getElementById('reuseTokenInput').value = urlToken;
+      loginWithToken();
+    }
+  }
+});
+
+function rand(n) {
+  const c = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return Array.from({length:n}, () => c[Math.floor(Math.random()*c.length)]).join('');
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtTime(d) {
+  const diff = Date.now() - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+  if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleDateString();
+}
+let toastTm;
+function toast(icon, msg) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTm);
+  toastTm = setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
